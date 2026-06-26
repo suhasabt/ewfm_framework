@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   BarChart3,
   Bell,
@@ -265,6 +265,50 @@ function uniqueValues(values: string[]) {
   return Array.from(new Set(values)).sort()
 }
 
+type BookingKind = 'call' | 'demo'
+type DemoNotification = { id: string; message: string; createdAt: number; contactId?: number; kind?: BookingKind }
+const NOTIFICATIONS_STORAGE_KEY = 'beeforce_demo_notifications'
+
+function readNotifications(): DemoNotification[] {
+  try {
+    const raw = window.localStorage.getItem(NOTIFICATIONS_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function pushNotification(message: string, contactId?: number, kind?: BookingKind) {
+  const notifications = readNotifications()
+  notifications.unshift({ id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, message, createdAt: Date.now(), contactId, kind })
+  window.localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(notifications.slice(0, 20)))
+  window.dispatchEvent(new Event('beeforce-notifications-updated'))
+}
+
+type ContactBookings = Partial<Record<BookingKind, number>>
+
+function latestBookingsByContact(notifications: DemoNotification[]) {
+  const map = new Map<number, ContactBookings>()
+  for (const notification of notifications) {
+    if (notification.contactId == null || !notification.kind) continue
+    const existing = map.get(notification.contactId) ?? {}
+    if (!existing[notification.kind] || notification.createdAt > existing[notification.kind]!) {
+      existing[notification.kind] = notification.createdAt
+    }
+    map.set(notification.contactId, existing)
+  }
+  return map
+}
+
+function timeAgo(timestamp: number) {
+  const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000))
+  if (seconds < 60) return 'just now'
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.round(minutes / 60)
+  return `${hours} hr ago`
+}
+
 function matchesSearch(contact: Contact, query: string) {
   const text = `${contact.name} ${contact.company} ${contact.persona} ${contact.industry} ${contact.campaign} ${contact.owner} ${contact.status}`.toLowerCase()
   return text.includes(query.toLowerCase())
@@ -302,6 +346,18 @@ function AdminApp() {
   const [adminNotice, setAdminNotice] = useState('Ready')
   const [bdrOwner, setBdrOwner] = useState(initialContacts[0].owner)
   const bdrOwners = useMemo(() => uniqueValues(initialContacts.map((contact) => contact.owner)), [])
+  const [bookings, setBookings] = useState(() => latestBookingsByContact(readNotifications()))
+
+  useEffect(() => {
+    const refresh = () => setBookings(latestBookingsByContact(readNotifications()))
+    refresh()
+    window.addEventListener('beeforce-notifications-updated', refresh)
+    window.addEventListener('storage', refresh)
+    return () => {
+      window.removeEventListener('beeforce-notifications-updated', refresh)
+      window.removeEventListener('storage', refresh)
+    }
+  }, [])
 
   const activeContacts = useMemo(() => {
     if (stageFilter === 'All') return contacts
@@ -387,6 +443,7 @@ function AdminApp() {
               onOpenReport={(contact) => { setSelectedContact(contact); setOverlay('report') }}
               onOpenOutreach={(contact) => { setSelectedContact(contact); setOverlay('outreach') }}
               onOpenDeck={(contact) => { setSelectedContact(contact); setOverlay('deck') }}
+              bookings={bookings}
             />
           )}
           {view === 'tracker' && (
@@ -397,6 +454,7 @@ function AdminApp() {
               onOpenReport={(contact) => { setSelectedContact(contact); setOverlay('report') }}
               onOpenOutreach={(contact) => { setSelectedContact(contact); setOverlay('outreach') }}
               onOpenDeck={(contact) => { setSelectedContact(contact); setOverlay('deck') }}
+              bookings={bookings}
             />
           )}
           {view === 'reports' && <CompletedReports contacts={contacts.filter((contact) => completedStatus(contact.status))} onOpenAccount={openAccount} onOpenReport={(contact) => { setSelectedContact(contact); setOverlay('report') }} onOutreach={(contact) => { setSelectedContact(contact); setOverlay('outreach') }} />}
@@ -445,6 +503,21 @@ function Topbar() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [notifications, setNotifications] = useState<DemoNotification[]>([])
+  const [seenCount, setSeenCount] = useState(0)
+
+  useEffect(() => {
+    const refresh = () => setNotifications(readNotifications())
+    refresh()
+    window.addEventListener('beeforce-notifications-updated', refresh)
+    window.addEventListener('storage', refresh)
+    return () => {
+      window.removeEventListener('beeforce-notifications-updated', refresh)
+      window.removeEventListener('storage', refresh)
+    }
+  }, [])
+
+  const unreadCount = Math.max(notifications.length - seenCount, 0)
 
   return (
     <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -473,13 +546,37 @@ function Topbar() {
             </button>
           )}
           <div className="relative">
-            <button onClick={() => setNotificationsOpen((open) => !open)} className="rounded-md border border-slate-200 bg-white p-2 text-slate-600">
+            <button
+              onClick={() => {
+                setNotificationsOpen((open) => !open)
+                setSeenCount(notifications.length)
+              }}
+              className="relative rounded-md border border-slate-200 bg-white p-2 text-slate-600"
+            >
               <Bell size={18} />
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+                  {unreadCount}
+                </span>
+              )}
             </button>
             {notificationsOpen && (
-              <div className="absolute right-0 top-full z-20 mt-2 w-64 rounded-md border border-slate-200 bg-white p-4 text-center shadow-lg">
-                <p className="text-sm font-bold text-slate-700">No new notifications</p>
-                <p className="mt-1 text-xs text-slate-500">You're all caught up.</p>
+              <div className="absolute right-0 top-full z-20 mt-2 w-80 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
+                {notifications.length === 0 ? (
+                  <div className="p-4 text-center">
+                    <p className="text-sm font-bold text-slate-700">No new notifications</p>
+                    <p className="mt-1 text-xs text-slate-500">You're all caught up.</p>
+                  </div>
+                ) : (
+                  <div className="max-h-80 space-y-1 overflow-y-auto">
+                    {notifications.map((notification) => (
+                      <div key={notification.id} className="rounded-md p-3 text-left hover:bg-slate-50">
+                        <p className="text-sm font-semibold text-slate-800">{notification.message}</p>
+                        <p className="mt-1 text-xs text-slate-400">{timeAgo(notification.createdAt)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -645,6 +742,7 @@ function CampaignDetail({
   onOpenReport,
   onOpenOutreach,
   onOpenDeck,
+  bookings,
 }: {
   allContacts: Contact[]
   contacts: Contact[]
@@ -655,6 +753,7 @@ function CampaignDetail({
   onOpenReport: (contact: Contact) => void
   onOpenOutreach: (contact: Contact) => void
   onOpenDeck: (contact: Contact) => void
+  bookings: Map<number, ContactBookings>
 }) {
   const [query, setQuery] = useState('')
   const visibleContacts = filterContacts(contacts, query)
@@ -686,7 +785,7 @@ function CampaignDetail({
           })}
         </div>
       </Panel>
-      <ContactTable contacts={visibleContacts} onOpenAccount={onOpenAccount} onAction={onAction} onOpenReport={onOpenReport} onOpenOutreach={onOpenOutreach} onOpenDeck={onOpenDeck} />
+      <ContactTable contacts={visibleContacts} onOpenAccount={onOpenAccount} onAction={onAction} onOpenReport={onOpenReport} onOpenOutreach={onOpenOutreach} onOpenDeck={onOpenDeck} bookings={bookings} />
     </section>
   )
 }
@@ -698,6 +797,7 @@ function AssessmentTracker({
   onOpenReport,
   onOpenOutreach,
   onOpenDeck,
+  bookings,
 }: {
   contacts: Contact[]
   onOpenAccount: (contact: Contact) => void
@@ -705,6 +805,7 @@ function AssessmentTracker({
   onOpenReport: (contact: Contact) => void
   onOpenOutreach: (contact: Contact) => void
   onOpenDeck: (contact: Contact) => void
+  bookings: Map<number, ContactBookings>
 }) {
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState<TrackerFilters>({ campaign: '', persona: '', industry: '', status: '', owner: '' })
@@ -750,7 +851,7 @@ function AssessmentTracker({
           <span className="rounded-md bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600">{visibleContacts.length} matching contacts</span>
         </div>
       </Panel>
-      <ContactTable contacts={visibleContacts} onOpenAccount={onOpenAccount} onAction={onAction} onOpenReport={onOpenReport} onOpenOutreach={onOpenOutreach} onOpenDeck={onOpenDeck} />
+      <ContactTable contacts={visibleContacts} onOpenAccount={onOpenAccount} onAction={onAction} onOpenReport={onOpenReport} onOpenOutreach={onOpenOutreach} onOpenDeck={onOpenDeck} bookings={bookings} />
     </section>
   )
 }
@@ -967,6 +1068,7 @@ function ContactTable({
   onOpenReport,
   onOpenOutreach,
   onOpenDeck,
+  bookings,
 }: {
   contacts: Contact[]
   onOpenAccount: (contact: Contact) => void
@@ -974,16 +1076,19 @@ function ContactTable({
   onOpenReport: (contact: Contact) => void
   onOpenOutreach: (contact: Contact) => void
   onOpenDeck: (contact: Contact) => void
+  bookings?: Map<number, ContactBookings>
 }) {
   return (
     <Panel>
       <div className="overflow-hidden rounded-md border border-slate-200">
-        <table className="w-full min-w-[1180px] text-left text-sm">
+        <table className="w-full min-w-[1280px] text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-            <tr>{['Contact', 'Company', 'Persona', 'Status', 'Last activity', 'Since sent', 'Suggested action', 'Actions'].map((heading) => <th key={heading} className="px-4 py-3 font-bold">{heading}</th>)}</tr>
+            <tr>{['Contact', 'Company', 'Persona', 'Status', 'Last activity', 'Since sent', 'Suggested action', 'Requests', 'Actions'].map((heading) => <th key={heading} className="px-4 py-3 font-bold">{heading}</th>)}</tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
-            {contacts.map((contact) => (
+            {contacts.map((contact) => {
+              const booking = bookings?.get(contact.id)
+              return (
               <tr key={contact.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3">
                   <button onClick={() => onOpenAccount(contact)} className="font-bold text-slate-950 hover:text-brand">{contact.name}</button>
@@ -995,6 +1100,20 @@ function ContactTable({
                 <td className="px-4 py-3 text-slate-600">{contact.lastActivity}</td>
                 <td className="px-4 py-3 text-slate-600">{contact.sentAgo}</td>
                 <td className="px-4 py-3 text-slate-600">{contact.action}</td>
+                <td className="px-4 py-3">
+                  {booking?.call || booking?.demo ? (
+                    <div className="flex flex-wrap gap-1">
+                      {booking?.call && (
+                        <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-200">Consulting call requested</span>
+                      )}
+                      {booking?.demo && (
+                        <span className="rounded-full bg-purple-50 px-2 py-1 text-xs font-bold text-purple-700 ring-1 ring-purple-200">Demo booked</span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-sm text-slate-400">—</span>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-2">
                     <button onClick={() => onOpenAccount(contact)} className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700">
@@ -1018,10 +1137,11 @@ function ContactTable({
                   </div>
                 </td>
               </tr>
-            ))}
+              )
+            })}
             {contacts.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-sm font-semibold text-slate-500">No matching contacts.</td>
+                <td colSpan={9} className="px-4 py-8 text-center text-sm font-semibold text-slate-500">No matching contacts.</td>
               </tr>
             )}
           </tbody>
@@ -1271,7 +1391,10 @@ function ReportDetail({ contact, onOutreach, onDeck, showAdminActions = true }: 
             <>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
-                  onClick={() => setCallBooked(true)}
+                  onClick={() => {
+                    setCallBooked(true)
+                    pushNotification(`${contact.name} (${contact.persona}) at ${contact.company} booked a consulting call`, contact.id, 'call')
+                  }}
                   disabled={callBooked}
                   className="rounded-md bg-brand px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -1692,7 +1815,10 @@ function PersonaReport({ contact }: { contact: Contact }) {
           <div className="flex items-center gap-3">
             {demoRequested && <span className="hidden text-sm font-bold text-emerald-700 sm:inline">Demo request sent — we'll be in touch shortly.</span>}
             <button
-              onClick={() => setDemoRequested(true)}
+              onClick={() => {
+                setDemoRequested(true)
+                pushNotification(`${contact.name} (${contact.persona}) at ${contact.company} requested a demo`, contact.id, 'demo')
+              }}
               disabled={demoRequested}
               className="rounded-md bg-brand px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
