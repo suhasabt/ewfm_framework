@@ -1302,13 +1302,177 @@ function calculateAssessmentScores(questions: typeof frameworkItems, answers: Re
   return { overall, moduleScores }
 }
 
+// --- Report spec (June 2026) — maturity scale, risk tiers, and persona content model ---
+
+const maturityLevels = [
+  { min: 0, label: 'Manual & Reactive', color: '#ef4444' },
+  { min: 21, label: 'Basic Digitalization', color: '#f97316' },
+  { min: 41, label: 'Process Driven', color: '#f59e0b' },
+  { min: 61, label: 'Integrated Workforce Mgmt', color: '#86efac' },
+  { min: 81, label: 'Best-in-Class EWF Excellence', color: '#16a34a' },
+]
+
+function maturityLevelIndex(score: number) {
+  return maturityLevels.reduce((acc, level, index) => (score >= level.min ? index : acc), 0)
+}
+
+function riskTier(score: number): 'high' | 'medium' | 'low' {
+  if (score <= 33) return 'high'
+  if (score <= 66) return 'medium'
+  return 'low'
+}
+
+const riskTierTone: Record<'high' | 'medium' | 'low', { badge: string; border: string; text: string }> = {
+  high: { badge: 'bg-red-50 text-red-700 ring-red-200', border: 'border-l-red-500', text: 'text-red-700' },
+  medium: { badge: 'bg-amber-50 text-amber-700 ring-amber-200', border: 'border-l-amber-500', text: 'text-amber-700' },
+  low: { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', border: 'border-l-emerald-500', text: 'text-emerald-700' },
+}
+
+const personaWeights: Record<Persona, Record<string, number>> = {
+  CFO: {
+    'Compliance Management': 5, 'Attendance & Time Management': 5, 'Payroll & Payout Management': 5,
+    'Workforce Communication': 3, 'Workforce Onboarding': 3, 'Predictive Workforce Analytics': 4,
+    'Vendor Management': 4, 'Workforce Core Management': 3, 'Workforce Exit & Offboarding': 3, 'Grievance Management': 2,
+  },
+  CHRO: {
+    'Compliance Management': 3, 'Attendance & Time Management': 3, 'Payroll & Payout Management': 2,
+    'Workforce Communication': 4, 'Workforce Onboarding': 5, 'Predictive Workforce Analytics': 4,
+    'Vendor Management': 3, 'Workforce Core Management': 4, 'Workforce Exit & Offboarding': 4, 'Grievance Management': 5,
+  },
+  'HR Digital': {
+    'Compliance Management': 4, 'Attendance & Time Management': 4, 'Payroll & Payout Management': 4,
+    'Workforce Communication': 3, 'Workforce Onboarding': 5, 'Predictive Workforce Analytics': 3,
+    'Vendor Management': 4, 'Workforce Core Management': 4, 'Workforce Exit & Offboarding': 4, 'Grievance Management': 3,
+  },
+  CDO: {
+    'Compliance Management': 3, 'Attendance & Time Management': 4, 'Payroll & Payout Management': 3,
+    'Workforce Communication': 2, 'Workforce Onboarding': 4, 'Predictive Workforce Analytics': 5,
+    'Vendor Management': 3, 'Workforce Core Management': 3, 'Workforce Exit & Offboarding': 3, 'Grievance Management': 2,
+  },
+}
+
+type PersonaContent = {
+  badge: string
+  angle: string
+  execCards: Array<{ label: string; value: (m: Record<string, number>) => string; desc: string }>
+  riskHeadline: string
+  missingFraming: string
+  improvementFraming: (practice: string) => string
+  impactColumn: string
+  helpFraming: string
+  cta: string
+}
+
+const avgOf = (m: Record<string, number>, modules: string[]) => {
+  const values = modules.map((module) => m[module] ?? 0)
+  return Math.round(values.reduce((sum, v) => sum + v, 0) / Math.max(values.length, 1))
+}
+
+const personaContent: Record<Persona, PersonaContent> = {
+  CFO: {
+    badge: 'Financial & Compliance Lens',
+    angle: 'Cost leakage · Penalty risk · Audit trail · OT cost control',
+    execCards: [
+      { label: 'Compliance Exposure', value: (m) => `${100 - (m['Compliance Management'] ?? 0)}%`, desc: 'Unmitigated compliance/penalty risk' },
+      { label: 'Attendance Accuracy', value: (m) => `${m['Attendance & Time Management'] ?? 0}%`, desc: 'Ties directly to payroll leakage' },
+      { label: 'Potential Cost Reduction', value: (m) => `${Math.min(15 * Object.values(m).filter((s) => riskTier(s) === 'high').length, 60)}%`, desc: 'Estimated from current high-risk modules' },
+    ],
+    riskHeadline: 'High Financial Risk',
+    missingFraming: 'Every missing control is an unquantified financial liability.',
+    improvementFraming: (practice) => `Implementing ${practice} reduces audit prep effort and closes a payroll leakage path.`,
+    impactColumn: 'CFO Financial Angle',
+    helpFraming: 'cost reduction and accuracy',
+    cta: 'Book a consulting call to validate financial risk exposure',
+  },
+  CHRO: {
+    badge: 'People & Workforce Lens',
+    angle: 'Worker experience · Hiring quality · Labour law · Attrition prevention',
+    execCards: [
+      { label: 'Worker Experience Score', value: (m) => `${avgOf(m, ['Workforce Onboarding', 'Grievance Management', 'Workforce Communication'])}%`, desc: 'Avg. of onboarding, grievance, communication' },
+      { label: 'Attrition Risk Indicator', value: (m) => `${100 - avgOf(m, ['Grievance Management', 'Predictive Workforce Analytics'])}%`, desc: 'Derived from grievance + predictive analytics' },
+      { label: 'Time-to-Productivity Gain', value: (m) => `${Math.round((100 - (m['Workforce Onboarding'] ?? 0)) * 0.5)}%`, desc: 'Estimated from onboarding gap' },
+    ],
+    riskHeadline: 'High People Risk',
+    missingFraming: 'Missing practices create friction in the worker lifecycle.',
+    improvementFraming: (practice) => `Implementing ${practice} builds worker trust and reduces hiring/attrition risk.`,
+    impactColumn: 'CHRO People Angle',
+    helpFraming: 'workforce experience improvement and risk reduction',
+    cta: 'Book a consulting call to map your workforce experience gaps',
+  },
+  'HR Digital': {
+    badge: 'Operations & Automation Lens',
+    angle: 'Workflow automation · Digital process · System integration · Cycle time',
+    execCards: [
+      { label: 'Automation Coverage', value: (m) => `${Math.round(Object.values(m).reduce((s, v) => s + v, 0) / Math.max(Object.values(m).length, 1))}%`, desc: '% of modules with full digital workflows' },
+      { label: 'Manual Process Ratio', value: (m) => `${100 - Math.round(Object.values(m).reduce((s, v) => s + v, 0) / Math.max(Object.values(m).length, 1))}%`, desc: 'Inverse of automation coverage' },
+      { label: 'Integration Gap Count', value: (m) => `${Object.values(m).filter((s) => s < 50).length}`, desc: 'Modules lacking system integration' },
+    ],
+    riskHeadline: 'High Operational Risk',
+    missingFraming: 'Each gap is a manual step that creates delay, error, and audit risk.',
+    improvementFraming: (practice) => `Implementing ${practice} automates a manual handoff and cuts cycle time.`,
+    impactColumn: 'HRDO Operations Angle',
+    helpFraming: 'workflow digitization and process replacement',
+    cta: 'Book a consulting call to map your automation roadmap',
+  },
+  CDO: {
+    badge: 'Data & AI Readiness Lens',
+    angle: 'Real-time data capture · System interoperability · AI model input quality',
+    execCards: [
+      { label: 'Data Maturity Index', value: (m) => `${avgOf(m, ['Attendance & Time Management', 'Predictive Workforce Analytics'])}%`, desc: 'Avg. of modules with real-time data capture' },
+      { label: 'AI Readiness Score', value: (m) => `${m['Predictive Workforce Analytics'] ?? 0}%`, desc: 'Predictive Workforce Analytics module score' },
+      { label: 'System Integration Depth', value: (m) => `${avgOf(m, ['Vendor Management', 'Attendance & Time Management'])}%`, desc: '% of modules with API/biometric/digital feeds' },
+    ],
+    riskHeadline: 'High Data Risk',
+    missingFraming: 'Without verified data at source, AI models and dashboards are built on unreliable inputs.',
+    improvementFraming: (practice) => `Implementing ${practice} improves data capture quality and AI model accuracy.`,
+    impactColumn: 'CDO Data Angle',
+    helpFraming: 'data infrastructure and AI readiness enablement',
+    cta: 'Book a consulting call to assess your data architecture readiness',
+  },
+}
+
+function sortModulesForPersona(moduleEntries: Array<[string, number]>, persona: Persona) {
+  const weights = personaWeights[persona]
+  const tierOrder = { high: 0, medium: 1, low: 2 }
+  return [...moduleEntries].sort((a, b) => {
+    const tierDiff = tierOrder[riskTier(a[1])] - tierOrder[riskTier(b[1])]
+    if (tierDiff !== 0) return tierDiff
+    return (weights[b[0]] ?? 0) - (weights[a[0]] ?? 0)
+  })
+}
+
+function MaturityBar({ score }: { score: number }) {
+  const levelIndex = maturityLevelIndex(score)
+  const nextLevel = maturityLevels[levelIndex + 1]
+  return (
+    <div>
+      <div className="flex gap-1">
+        {maturityLevels.map((level, index) => (
+          <div key={level.label} className="h-2 flex-1 rounded-full" style={{ backgroundColor: index <= levelIndex ? level.color : '#e5e7eb' }} />
+        ))}
+      </div>
+      <p className="mt-2 text-sm font-black" style={{ color: maturityLevels[levelIndex].color }}>{maturityLevels[levelIndex].label}</p>
+      {nextLevel && <p className="text-xs font-semibold" style={{ color: nextLevel.color }}>Next target: {nextLevel.label}</p>}
+    </div>
+  )
+}
+
 function ReportDetail({ contact, onOutreach, onDeck, showAdminActions = true }: { contact: Contact; onOutreach: () => void; onDeck: () => void; showAdminActions?: boolean }) {
   const [reportView, setReportView] = useState<'report' | 'visual'>('report')
   const [callBooked, setCallBooked] = useState(false)
   const weak = weakestModules(contact)
-  const moduleViewTitle = showAdminActions ? 'Admin extended view' : 'Module-wise view'
-  const primaryGap = weak[0]?.[0] ?? 'your top maturity gap'
   const moduleEntries = Object.entries(contact.moduleScores)
+  const content = personaContent[contact.persona]
+  const sortedModules = sortModulesForPersona(moduleEntries, contact.persona)
+  const highRiskModules = sortedModules.filter(([, score]) => riskTier(score) === 'high')
+  const gapModules = sortedModules.filter(([, score]) => score < 100)
+  const weights = personaWeights[contact.persona]
+  const actionPlanModules = [...sortedModules]
+    .sort((a, b) => (weights[b[0]] ?? 0) * (100 - b[1]) - (weights[a[0]] ?? 0) * (100 - a[1]))
+    .slice(0, 3)
+  const riskTags = highRiskModules
+    .flatMap(([module]) => frameworkItems.filter((item) => item.module === module).slice(0, 2).map((item) => item.practice))
+    .slice(0, 5)
 
   return (
     <div id="single-shot-report" className="mx-auto max-w-6xl rounded-md bg-white p-7 shadow-sm">
@@ -1326,98 +1490,200 @@ function ReportDetail({ contact, onOutreach, onDeck, showAdminActions = true }: 
         <ReportVisualization contact={contact} weak={weak} moduleEntries={moduleEntries} />
       ) : (
         <>
-      <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-wide text-brand">{contact.company}</p>
-          <h2 className="mt-2 max-w-3xl text-[2rem] font-black leading-tight text-slate-950">External Workforce Management Maturity Assessment</h2>
-          <p className="mt-4 text-base font-black text-slate-900">{contact.name}</p>
-          <p className="mt-1 text-sm font-medium text-slate-600">{contact.designation}</p>
-          {showAdminActions && <p className="mt-2 text-sm text-slate-500">Industry: {contact.industry} | Assessment date: June 2026</p>}
-        </div>
-        <div className={`rounded-md p-5 ${scoreCardTone(contact.score)}`}>
-          <p className="text-xs font-bold uppercase text-white/75">Overall score</p>
-          <p className="mt-1 text-4xl font-black">{contact.score}%</p>
-          <p className="text-sm text-white/90">{scoreLevel(contact.score)}</p>
-        </div>
-      </div>
-      <section className="grid gap-5 py-5 lg:grid-cols-[1.1fr_.9fr]">
-        <div>
-          <h3 className="text-lg font-black text-slate-950">Business outcome</h3>
-          <p className="mt-3 text-sm font-medium leading-6 text-slate-600">Based on the score, BeeForce estimates that closing the top workforce gaps could reduce audit preparation effort by 40-60%, cut payroll exception cycles by 20-30%, and give leadership a cleaner view of contractor cost, compliance, and productivity.</p>
-          <h3 className="mt-6 text-lg font-black text-slate-950">Key risks</h3>
-          <div className="mt-3 space-y-3">
-            {weak.map(([module, score]) => (
-              <div key={module} className="rounded-md border border-slate-200 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-base font-black text-slate-950">{module}</p>
-                  <span className="font-black text-red-700">{score}%</span>
-                </div>
-                <p className="mt-2 text-sm font-medium leading-5 text-slate-600">Missing practices: {frameworkItems.filter((item) => item.module === module).slice(0, 3).map((item) => item.practice).join(', ')}.</p>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div>
-          <h3 className="text-lg font-black text-slate-950">Potential business impact</h3>
-          <div className="mt-3 divide-y divide-slate-100 rounded-md border border-slate-200">
-            {weak.map(([module]) => (
-              <div key={module} className="flex items-center justify-between gap-4 p-3 text-sm">
-                <span className="font-bold text-slate-700">{module}</span>
-                <span className="text-right font-black text-slate-950">30-50% effort reduction</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-      <section className="border-t border-slate-200 pt-5">
-        <h3 className="text-lg font-black text-slate-950">{moduleViewTitle}</h3>
-        {!showAdminActions && <p className="mt-2 text-sm font-medium text-slate-600">Average score by module, calculated from the responses submitted in this assessment.</p>}
-        <div className="mt-3 overflow-hidden rounded-md border border-slate-200">
-          {moduleEntries.map(([module, score]) => (
-            <div key={module} className="grid grid-cols-[1fr_90px_110px] gap-3 border-b border-slate-100 p-3 text-sm last:border-0">
-              <span className="font-bold text-slate-900">{module}</span>
-              <span className="font-black text-slate-800">{score}%</span>
-              <span className={`rounded-full px-2 py-1 text-center text-xs font-bold ring-1 ${riskFor(score).className}`}>{riskFor(score).label}</span>
+          {/* 1. Header */}
+          <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-brand">{contact.company}</p>
+              <span className="mt-2 inline-block rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-200">{content.badge}</span>
+              <h2 className="mt-3 max-w-3xl text-[2rem] font-black leading-tight text-slate-950">External Workforce Management Maturity Assessment</h2>
+              <p className="mt-4 text-base font-black text-slate-900">{contact.name}</p>
+              <p className="mt-1 text-sm font-medium text-slate-600">{contact.designation}</p>
+              {showAdminActions && <p className="mt-2 text-sm text-slate-500">Industry: {contact.industry} | Assessment date: June 2026</p>}
             </div>
-          ))}
-        </div>
-      </section>
-      <section className="border-t border-slate-200 pt-5">
-        <div className="rounded-md bg-blue-50 p-5">
-          <p className="text-xs font-bold uppercase text-blue-700">Recommended next step</p>
-          <h3 className="mt-2 text-lg font-black text-blue-950">Discuss your top maturity gaps with BeeForce</h3>
-          <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-blue-950">Book a consulting call to review {primaryGap}, validate your top maturity gaps, and identify the fastest path to improve external workforce control.</p>
-          {!showAdminActions && (
-            <>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  onClick={() => {
-                    setCallBooked(true)
-                    pushNotification(`${contact.name} (${contact.persona}) at ${contact.company} booked a consulting call`, contact.id, 'call')
-                  }}
-                  disabled={callBooked}
-                  className="rounded-md bg-brand px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {callBooked ? 'Request sent' : 'Book a consulting call'}
-                </button>
-                <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-md border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-950"><Download size={16} /> Download report</button>
+            <div className="w-full max-w-xs rounded-md border border-slate-200 p-5">
+              <p className="text-xs font-bold uppercase text-slate-500">Overall score</p>
+              <p className="mt-1 text-4xl font-black text-slate-950">{contact.score}%</p>
+              <div className="mt-3"><MaturityBar score={contact.score} /></div>
+            </div>
+          </div>
+
+          {/* 2. Exec summary KPI cards (persona-driven) */}
+          <section className="grid gap-3 py-5 sm:grid-cols-3">
+            {content.execCards.map((card, index) => (
+              <div key={card.label} className={`rounded-md border-t-4 bg-white p-4 shadow-sm ${index === 0 ? 'border-t-red-500' : index === 1 ? 'border-t-amber-500' : 'border-t-blue-500'}`}>
+                <p className="text-xs font-bold uppercase text-slate-500">{card.label}</p>
+                <p className="mt-1 text-2xl font-black text-slate-950">{card.value(contact.moduleScores)}</p>
+                <p className="mt-1 text-xs font-medium text-slate-500">{card.desc}</p>
               </div>
-              {callBooked && (
-                <p className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-emerald-700">
-                  <Check size={16} /> Thanks — a BeeForce consultant will reach out within 1 business day.
+            ))}
+          </section>
+
+          {/* 3. Risk banner — only if HIGH risk modules exist */}
+          {highRiskModules.length > 0 && (
+            <section className="pb-5">
+              <div className="rounded-md border border-red-200 bg-red-50 p-5">
+                <p className="text-sm font-black uppercase text-red-700">{content.riskHeadline}</p>
+                <p className="mt-2 text-sm font-semibold leading-6 text-red-950">
+                  {highRiskModules.map(([module]) => module).join(', ')} {highRiskModules.length === 1 ? 'is' : 'are'} rated high risk. {content.missingFraming}
                 </p>
-              )}
-            </>
+                {riskTags.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {riskTags.map((tag) => (
+                      <span key={tag} className="rounded-full bg-white px-2 py-1 text-xs font-bold text-red-700 ring-1 ring-red-200">{tag}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
           )}
-          {showAdminActions && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button onClick={onOutreach} className="inline-flex items-center gap-2 rounded-md bg-brand px-4 py-2 text-sm font-bold text-white"><Mail size={16} /> Create Outreach</button>
-              <button onClick={onDeck} className="inline-flex items-center gap-2 rounded-md border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-950"><Presentation size={16} /> Build PPT</button>
-              <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-md border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-950"><Download size={16} /> Download PDF</button>
+
+          {/* 4. Potential impact table */}
+          <section className="border-t border-slate-200 pt-5">
+            <h3 className="text-lg font-black text-slate-950">Potential business impact</h3>
+            <div className="mt-3 overflow-x-auto rounded-md border border-slate-200">
+              <table className="w-full min-w-[560px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 font-bold">Module</th>
+                    <th className="px-4 py-3 font-bold">{content.impactColumn}</th>
+                    <th className="px-4 py-3 font-bold">Reduction estimate</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {sortedModules.slice(0, 6).map(([module, score]) => {
+                    const tier = riskTier(score)
+                    return (
+                      <tr key={module}>
+                        <td className="px-4 py-3 font-bold text-slate-900">{module}</td>
+                        <td className="px-4 py-3 text-slate-600">{content.angle}</td>
+                        <td className={`px-4 py-3 text-right font-black ${riskTierTone[tier].text}`}>
+                          {tier === 'high' ? '60-80% effort reduction' : tier === 'medium' ? '30-50% effort reduction' : 'Maintain current practice'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-          )}
-        </div>
-      </section>
+          </section>
+
+          {/* 5. Module cards (consolidated) */}
+          <section className="border-t border-slate-200 pt-5">
+            <h3 className="text-lg font-black text-slate-950">{showAdminActions ? 'Admin extended view' : 'Module-wise view'}</h3>
+            <div className="mt-3 space-y-3">
+              {sortedModules.map(([module, score]) => {
+                const tier = riskTier(score)
+                const tone = riskTierTone[tier]
+                const items = frameworkItems.filter((item) => item.module === module)
+                if (score === 100) {
+                  return (
+                    <div key={module} className="rounded-md border-l-4 border-l-emerald-500 bg-emerald-50 p-4">
+                      <p className="font-black text-emerald-900">{module} — fully achieved</p>
+                      <p className="mt-1 text-sm font-semibold text-emerald-700">All practices in place. No action needed.</p>
+                    </div>
+                  )
+                }
+                const missingCount = Math.max(1, Math.round(((100 - score) / 100) * items.length))
+                const missingPractices = items.slice(0, missingCount).map((item) => item.practice)
+                const improvements = items.slice(0, missingCount).slice(0, 3).map((item) => content.improvementFraming(item.practice))
+                return (
+                  <div key={module} className={`rounded-md border-l-4 bg-white p-4 shadow-sm ${tone.border}`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="font-black text-slate-950">{module}</p>
+                        <p className="text-xs font-semibold text-slate-500">{content.angle}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`rounded-full px-2 py-1 text-xs font-bold ring-1 ${tone.badge}`}>{tier} risk</span>
+                        <span className="text-lg font-black text-slate-950">{score}%</span>
+                      </div>
+                    </div>
+                    {missingPractices.length > 0 && (
+                      <p className="mt-3 text-sm font-medium leading-5 text-slate-600">Missing practices: {missingPractices.join(', ')}.</p>
+                    )}
+                    {improvements.length > 0 && (
+                      <ul className="mt-2 list-inside list-disc space-y-1 text-sm font-medium text-slate-600">
+                        {improvements.map((line) => <li key={line}>{line}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+
+          {/* 6. How BeeForce Can Help */}
+          <section className="border-t border-slate-200 pt-5">
+            <h3 className="text-lg font-black text-slate-950">How BeeForce can help</h3>
+            <p className="mt-1 text-sm font-medium text-slate-600">Framed as {content.helpFraming}.</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {gapModules.slice(0, 6).map(([module, score]) => {
+                const tier = riskTier(score)
+                const tone = riskTierTone[tier]
+                const items = frameworkItems.filter((item) => item.module === module)
+                return (
+                  <div key={module} className="rounded-md border border-slate-200 p-4">
+                    <span className={`rounded-full px-2 py-1 text-xs font-bold ring-1 ${tone.badge}`}>{tier} priority</span>
+                    <p className="mt-2 font-black text-slate-950">{module} Automation</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">Maps to: {module} — currently {score}%</p>
+                    <ul className="mt-2 list-inside list-disc space-y-1 text-xs font-medium text-slate-600">
+                      {items.slice(0, 4).map((item) => <li key={item.practice}>{item.practice}</li>)}
+                    </ul>
+                  </div>
+                )
+              })}
+              {gapModules.length === 0 && (
+                <p className="text-sm font-semibold text-slate-500">No active gaps — every module is fully achieved.</p>
+              )}
+            </div>
+          </section>
+
+          {/* 7. Action plan */}
+          <section className="mt-5 rounded-md bg-gradient-to-br from-[#1a56db] to-[#1340b8] p-5 text-white">
+            <p className="text-xs font-bold uppercase text-white/75">Recommended next steps</p>
+            <h3 className="mt-1 text-lg font-black">{content.cta}</h3>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {actionPlanModules.map(([module, score], index) => (
+                <div key={module} className="rounded-md bg-white/10 p-3">
+                  <p className="text-xs font-bold uppercase text-white/70">Step {index + 1}</p>
+                  <p className="mt-1 font-black">{module}</p>
+                  <p className="mt-1 text-xs font-medium text-white/80">{content.improvementFraming(frameworkItems.find((item) => item.module === module)?.practice ?? module)} (currently {score}%)</p>
+                </div>
+              ))}
+            </div>
+            {!showAdminActions && (
+              <>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      setCallBooked(true)
+                      pushNotification(`${contact.name} (${contact.persona}) at ${contact.company} booked a consulting call`, contact.id, 'call')
+                    }}
+                    disabled={callBooked}
+                    className="rounded-md bg-white px-4 py-2 text-sm font-bold text-blue-950 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {callBooked ? 'Request sent' : 'Book a consulting call'}
+                  </button>
+                  <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-md border border-white/30 bg-white/10 px-4 py-2 text-sm font-bold text-white"><Download size={16} /> Download report</button>
+                </div>
+                {callBooked && (
+                  <p className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-emerald-200">
+                    <Check size={16} /> Thanks — a BeeForce consultant will reach out within 1 business day.
+                  </p>
+                )}
+              </>
+            )}
+            {showAdminActions && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button onClick={onOutreach} className="inline-flex items-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-bold text-blue-950"><Mail size={16} /> Create Outreach</button>
+                <button onClick={onDeck} className="inline-flex items-center gap-2 rounded-md border border-white/30 bg-white/10 px-4 py-2 text-sm font-bold text-white"><Presentation size={16} /> Build PPT</button>
+                <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-md border border-white/30 bg-white/10 px-4 py-2 text-sm font-bold text-white"><Download size={16} /> Download PDF</button>
+              </div>
+            )}
+          </section>
+
+          {/* 8. Footer */}
+          <p className="mt-5 text-center text-xs font-semibold text-slate-400">{contact.company} · Assessment date: June 2026 · BeeForce EWFM Maturity Intelligence</p>
         </>
       )}
     </div>
