@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   BarChart3,
   Bell,
@@ -10,6 +10,7 @@ import {
   FileSpreadsheet,
   FileText,
   LayoutDashboard,
+  Loader2,
   Mail,
   Presentation,
   Search,
@@ -369,7 +370,12 @@ function AdminApp() {
               {adminNotice}
             </div>
           )}
-          {view === 'dispatch' && <BulkDispatch onCreate={() => { setView('campaigns'); setAdminNotice('Campaign generated with tokenized links for 3 valid contacts') }} />}
+          {view === 'dispatch' && (
+            <BulkDispatch
+              onCreate={() => { setView('campaigns'); setAdminNotice('Campaign generated with tokenized links for 3 valid contacts') }}
+              onNotice={setAdminNotice}
+            />
+          )}
           {view === 'campaigns' && (
             <CampaignDetail
               allContacts={contacts}
@@ -435,7 +441,18 @@ function overlayTitle(overlay: Overlay) {
   return 'Build PPT Deck'
 }
 
+const demoPersonaLinks = [
+  { label: 'CFO demo', token: 'cfo' },
+  { label: 'CHRO demo', token: 'chro' },
+  { label: 'CDO demo', token: 'cdo' },
+  { label: 'HR Digital demo', token: 'hr-digital' },
+]
+
 function Topbar() {
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+
   return (
     <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -444,20 +461,90 @@ function Topbar() {
           <h1 className="text-lg font-bold text-slate-950">Consulting-led assessment to sales cycle</h1>
         </div>
         <div className="flex items-center gap-2">
-          <button className="hidden items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 sm:flex">
-            <Search size={16} />
-            Search accounts
-          </button>
-          <button className="rounded-md border border-slate-200 bg-white p-2 text-slate-600">
-            <Bell size={18} />
-          </button>
+          <select
+            defaultValue=""
+            onChange={(event) => {
+              const token = event.target.value
+              if (token) window.open(`/assess/${token}`, '_blank')
+              event.target.value = ''
+            }}
+            className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700"
+          >
+            <option value="" disabled>Open demo link...</option>
+            {demoPersonaLinks.map((persona) => (
+              <option key={persona.token} value={persona.token}>{persona.label}</option>
+            ))}
+          </select>
+          {searchOpen ? (
+            <label className="relative hidden sm:block">
+              <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+              <input
+                autoFocus
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onBlur={() => { if (!searchQuery) setSearchOpen(false) }}
+                placeholder="Search accounts..."
+                className="w-56 rounded-md border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm font-semibold text-slate-700"
+              />
+            </label>
+          ) : (
+            <button onClick={() => setSearchOpen(true)} className="hidden items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 sm:flex">
+              <Search size={16} />
+              Search accounts
+            </button>
+          )}
+          <div className="relative">
+            <button onClick={() => setNotificationsOpen((open) => !open)} className="rounded-md border border-slate-200 bg-white p-2 text-slate-600">
+              <Bell size={18} />
+            </button>
+            {notificationsOpen && (
+              <div className="absolute right-0 top-full z-20 mt-2 w-64 rounded-md border border-slate-200 bg-white p-4 text-center shadow-lg">
+                <p className="text-sm font-bold text-slate-700">No new notifications</p>
+                <p className="mt-1 text-xs text-slate-500">You're all caught up.</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </header>
   )
 }
 
-function BulkDispatch({ onCreate }: { onCreate: () => void }) {
+function BulkDispatch({ onCreate, onNotice }: { onCreate: () => void; onNotice: (message: string) => void }) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [fileName, setFileName] = useState<string | null>(null)
+  const [validating, setValidating] = useState(false)
+  const [rows, setRows] = useState<string[][]>([])
+  const [usedRows, setUsedRows] = useState<Set<string>>(new Set())
+  const [channel, setChannel] = useState('Both')
+  const [schedule, setSchedule] = useState('Monday 9 AM')
+
+  const validCount = rows.filter((row) => row[4] === 'Valid').length
+  const duplicateCount = rows.filter((row) => row[4] === 'Duplicate').length
+  const needsFixingCount = rows.filter((row) => row[4] !== 'Valid' && row[4] !== 'Duplicate').length
+
+  const handleFileSelected = (file: File) => {
+    setFileName(file.name)
+    setValidating(true)
+    setRows([])
+    setUsedRows(new Set())
+    window.setTimeout(() => {
+      setRows(uploadRows.map((row) => [...row]))
+      setValidating(false)
+      onNotice(`Parsed ${file.name}: 3 valid, 1 duplicate, 1 needs fixing`)
+    }, 900)
+  }
+
+  const useRow = (row: string[]) => {
+    setUsedRows((current) => new Set(current).add(row[0]))
+    onNotice(`${row[1]} at ${row[0]} added to the campaign queue`)
+  }
+
+  const fixRow = (row: string[]) => {
+    setRows((current) => current.map((item) => (item[0] === row[0] ? [...item.slice(0, 4), 'Valid'] : item)))
+    onNotice(`${row[0]} row fixed and revalidated: now valid`)
+  }
+
   return (
     <section className="space-y-5">
       <PageHeader eyebrow="Create Campaign" title="Bulk dispatch with AI validation" description="Upload prospects, validate rows, configure delivery, and generate tokenized assessment links." />
@@ -468,51 +555,100 @@ function BulkDispatch({ onCreate }: { onCreate: () => void }) {
               <h2 className="text-base font-bold">Upload prospect sheet</h2>
               <p className="mt-1 text-sm text-slate-500">Expected columns: company, contact, designation, email, mobile, industry, owner.</p>
             </div>
-            <button className="inline-flex items-center gap-2 rounded-md bg-brand px-4 py-2 text-sm font-bold text-white">
-              <FileSpreadsheet size={16} />
-              Select Excel
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={validating}
+              className="inline-flex items-center gap-2 rounded-md bg-brand px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {validating ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
+              {validating ? 'Validating...' : 'Select Excel'}
             </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) handleFileSelected(file)
+                event.target.value = ''
+              }}
+            />
           </div>
+          {fileName && !validating && (
+            <p className="mt-3 text-xs font-semibold text-slate-500">
+              Loaded <span className="font-bold text-slate-700">{fileName}</span> — {validCount} valid, {duplicateCount} duplicate, {needsFixingCount} need fixing.
+            </p>
+          )}
           <div className="mt-5 overflow-hidden rounded-md border border-slate-200">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                <tr>
-                  {['Company', 'Contact', 'Persona', 'Industry', 'AI status', 'Action'].map((heading) => (
-                    <th key={heading} className="px-4 py-3 font-bold">{heading}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {uploadRows.map((row) => (
-                  <tr key={`${row[0]}-${row[1]}`}>
-                    {row.map((cell, index) => (
-                      <td key={cell} className="px-4 py-3">
-                        {index === 4 ? <ValidationBadge status={cell} /> : <span className="font-medium text-slate-700">{cell}</span>}
-                      </td>
+            {validating ? (
+              <div className="flex flex-col items-center justify-center gap-3 p-10 text-center">
+                <Loader2 size={28} className="animate-spin text-brand" />
+                <p className="text-sm font-bold text-slate-700">Validating rows with AI...</p>
+                <p className="text-xs text-slate-500">Checking for duplicates, missing fields, and persona mapping.</p>
+              </div>
+            ) : rows.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 p-10 text-center">
+                <Upload size={28} className="text-slate-300" />
+                <p className="text-sm font-bold text-slate-700">No file uploaded yet</p>
+                <p className="text-xs text-slate-500">Select a prospect sheet to validate rows and generate tokenized links.</p>
+              </div>
+            ) : (
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                  <tr>
+                    {['Company', 'Contact', 'Persona', 'Industry', 'AI status', 'Action'].map((heading) => (
+                      <th key={heading} className="px-4 py-3 font-bold">{heading}</th>
                     ))}
-                    <td className="px-4 py-3">
-                      <button className="text-sm font-bold text-brand">{row[4] === 'Valid' ? 'Use row' : 'Fix inline'}</button>
-                    </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {rows.map((row) => {
+                    const used = usedRows.has(row[0])
+                    return (
+                      <tr key={`${row[0]}-${row[1]}`}>
+                        {row.map((cell, index) => (
+                          <td key={cell} className="px-4 py-3">
+                            {index === 4 ? <ValidationBadge status={cell} /> : <span className="font-medium text-slate-700">{cell}</span>}
+                          </td>
+                        ))}
+                        <td className="px-4 py-3">
+                          {row[4] === 'Valid' ? (
+                            <button onClick={() => useRow(row)} disabled={used} className="text-sm font-bold text-brand disabled:cursor-not-allowed disabled:text-slate-400">
+                              {used ? 'Added' : 'Use row'}
+                            </button>
+                          ) : (
+                            <button onClick={() => fixRow(row)} className="text-sm font-bold text-brand">Fix inline</button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         </Panel>
         <Panel>
           <h2 className="text-base font-bold">Configure campaign</h2>
           <div className="mt-5 space-y-4">
             <Field label="Campaign name" value="Manufacturing EWFM Assessment - June 2026" />
-            <Segment label="Channel" options={['Email', 'WhatsApp', 'Both']} active="Both" />
-            <Segment label="Schedule" options={['Send now', 'Monday 9 AM', 'Custom']} active="Monday 9 AM" />
+            <Segment label="Channel" options={['Email', 'WhatsApp', 'Both']} active={channel} onChange={setChannel} />
+            <Segment label="Schedule" options={['Send now', 'Monday 9 AM', 'Custom']} active={schedule} onChange={setSchedule} />
             <div className="rounded-md border border-blue-100 bg-blue-50 p-4">
               <p className="text-xs font-bold uppercase text-blue-700">Personalization preview</p>
               <p className="mt-2 text-sm text-blue-950">Hi Ritika, BeeForce prepared a 10-minute EWFM maturity benchmark for Apex Auto Components. Your CFO report will quantify compliance, payroll, and contractor spend exposure.</p>
             </div>
-            <button onClick={onCreate} className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand px-4 py-3 text-sm font-bold text-white">
+            <button
+              onClick={onCreate}
+              disabled={validCount === 0}
+              title={validCount === 0 ? 'Upload and validate a sheet first' : undefined}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
               <Send size={17} />
               Generate Campaign
             </button>
+            {validCount === 0 && <p className="text-center text-xs font-semibold text-slate-500">Upload and validate a sheet first.</p>}
           </div>
         </Panel>
       </div>
@@ -1069,6 +1205,7 @@ function calculateAssessmentScores(questions: typeof frameworkItems, answers: Re
 
 function ReportDetail({ contact, onOutreach, onDeck, showAdminActions = true }: { contact: Contact; onOutreach: () => void; onDeck: () => void; showAdminActions?: boolean }) {
   const [reportView, setReportView] = useState<'report' | 'visual'>('report')
+  const [callBooked, setCallBooked] = useState(false)
   const weak = weakestModules(contact)
   const moduleViewTitle = showAdminActions ? 'Admin extended view' : 'Module-wise view'
   const primaryGap = weak[0]?.[0] ?? 'your top maturity gap'
@@ -1152,10 +1289,23 @@ function ReportDetail({ contact, onOutreach, onDeck, showAdminActions = true }: 
           <h3 className="mt-2 text-lg font-black text-blue-950">Discuss your top maturity gaps with BeeForce</h3>
           <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-blue-950">Book a consulting call to review {primaryGap}, validate your top maturity gaps, and identify the fastest path to improve external workforce control.</p>
           {!showAdminActions && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button className="rounded-md bg-brand px-4 py-2 text-sm font-bold text-white">Book a consulting call</button>
-              <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-md border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-950"><Download size={16} /> Download report</button>
-            </div>
+            <>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  onClick={() => setCallBooked(true)}
+                  disabled={callBooked}
+                  className="rounded-md bg-brand px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {callBooked ? 'Request sent' : 'Book a consulting call'}
+                </button>
+                <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-md border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-950"><Download size={16} /> Download report</button>
+              </div>
+              {callBooked && (
+                <p className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-emerald-700">
+                  <Check size={16} /> Thanks — a BeeForce consultant will reach out within 1 business day.
+                </p>
+              )}
+            </>
           )}
           {showAdminActions && (
             <div className="mt-4 flex flex-wrap gap-2">
@@ -1553,12 +1703,23 @@ function AssessmentExperience() {
 }
 
 function PersonaReport({ contact }: { contact: Contact }) {
+  const [demoRequested, setDemoRequested] = useState(false)
+
   return (
     <div className="min-h-screen bg-[#f4f7fb]">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-4">
           <img src={beeforceLogo} alt="BeeForce" className="h-9 object-contain" />
-          <button className="rounded-md bg-brand px-4 py-2 text-sm font-bold text-white">Book a Demo</button>
+          <div className="flex items-center gap-3">
+            {demoRequested && <span className="hidden text-sm font-bold text-emerald-700 sm:inline">Demo request sent — we'll be in touch shortly.</span>}
+            <button
+              onClick={() => setDemoRequested(true)}
+              disabled={demoRequested}
+              className="rounded-md bg-brand px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {demoRequested ? 'Request sent' : 'Book a Demo'}
+            </button>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">
@@ -1606,13 +1767,19 @@ function Field({ label, value }: { label: string; value: string }) {
   )
 }
 
-function Segment({ label, options, active }: { label: string; options: string[]; active: string }) {
+function Segment({ label, options, active, onChange }: { label: string; options: string[]; active: string; onChange: (option: string) => void }) {
   return (
     <div>
       <p className="text-xs font-bold uppercase text-slate-500">{label}</p>
       <div className="mt-2 grid grid-cols-3 gap-2">
         {options.map((option) => (
-          <button key={option} className={`rounded-md border px-3 py-2 text-sm font-bold ${option === active ? 'border-brand bg-blue-50 text-brand' : 'border-slate-200 text-slate-600'}`}>{option}</button>
+          <button
+            key={option}
+            onClick={() => onChange(option)}
+            className={`rounded-md border px-3 py-2 text-sm font-bold ${option === active ? 'border-brand bg-blue-50 text-brand' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+          >
+            {option}
+          </button>
         ))}
       </div>
     </div>
