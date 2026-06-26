@@ -656,7 +656,7 @@ function BulkDispatch({ onCreate, onNotice }: { onCreate: () => void; onNotice: 
               Loaded <span className="font-bold text-slate-700">{fileName}</span> — {validCount} valid, {duplicateCount} duplicate, {needsFixingCount} need fixing.
             </p>
           )}
-          <div className="mt-5 overflow-hidden rounded-md border border-slate-200">
+          <div className="mt-5 overflow-x-auto rounded-md border border-slate-200">
             {validating ? (
               <div className="flex flex-col items-center justify-center gap-3 p-10 text-center">
                 <Loader2 size={28} className="animate-spin text-brand" />
@@ -868,7 +868,7 @@ function CompletedReports({ contacts, onOpenAccount, onOpenReport, onOutreach }:
           <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search completed reports" className="w-full rounded-md border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm font-semibold text-slate-700" />
         </label>
-        <div className="overflow-hidden rounded-md border border-slate-200">
+        <div className="overflow-x-auto rounded-md border border-slate-200">
           <table className="w-full min-w-[820px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>{['Company', 'Persona', 'Score', 'Maturity', 'Top risk', 'Actions'].map((heading) => <th key={heading} className="px-4 py-3 font-bold">{heading}</th>)}</tr>
@@ -1080,7 +1080,7 @@ function ContactTable({
 }) {
   return (
     <Panel>
-      <div className="overflow-hidden rounded-md border border-slate-200">
+      <div className="overflow-x-auto rounded-md border border-slate-200">
         <table className="w-full min-w-[1280px] text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">
             <tr>{['Contact', 'Company', 'Persona', 'Status', 'Last activity', 'Since sent', 'Suggested action', 'Requests', 'Actions'].map((heading) => <th key={heading} className="px-4 py-3 font-bold">{heading}</th>)}</tr>
