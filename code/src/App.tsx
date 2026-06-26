@@ -299,6 +299,8 @@ function AdminApp() {
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [stageFilter, setStageFilter] = useState<ContactStatus | 'All'>('All')
   const [adminNotice, setAdminNotice] = useState('Ready')
+  const [bdrOwner, setBdrOwner] = useState(initialContacts[0].owner)
+  const bdrOwners = useMemo(() => uniqueValues(initialContacts.map((contact) => contact.owner)), [])
 
   const activeContacts = useMemo(() => {
     if (stageFilter === 'All') return contacts
@@ -346,7 +348,15 @@ function AdminApp() {
         <div className="absolute bottom-0 left-0 right-0 border-t border-slate-100 p-4">
           <div className="rounded-md bg-slate-50 p-3">
             <p className="text-xs font-bold uppercase text-slate-500">BDR Owner</p>
-            <p className="mt-1 text-sm font-semibold text-slate-900">Ananya Rao</p>
+            <select
+              value={bdrOwner}
+              onChange={(event) => setBdrOwner(event.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold text-slate-900"
+            >
+              {bdrOwners.map((owner) => (
+                <option key={owner} value={owner}>{owner}</option>
+              ))}
+            </select>
           </div>
         </div>
       </aside>
