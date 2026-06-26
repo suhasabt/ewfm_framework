@@ -441,13 +441,6 @@ function overlayTitle(overlay: Overlay) {
   return 'Build PPT Deck'
 }
 
-const demoPersonaLinks = [
-  { label: 'CFO demo', token: 'cfo' },
-  { label: 'CHRO demo', token: 'chro' },
-  { label: 'CDO demo', token: 'cdo' },
-  { label: 'HR Digital demo', token: 'hr-digital' },
-]
-
 function Topbar() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -461,20 +454,6 @@ function Topbar() {
           <h1 className="text-lg font-bold text-slate-950">Consulting-led assessment to sales cycle</h1>
         </div>
         <div className="flex items-center gap-2">
-          <select
-            defaultValue=""
-            onChange={(event) => {
-              const token = event.target.value
-              if (token) window.open(`/assess/${token}`, '_blank')
-              event.target.value = ''
-            }}
-            className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700"
-          >
-            <option value="" disabled>Open demo link...</option>
-            {demoPersonaLinks.map((persona) => (
-              <option key={persona.token} value={persona.token}>{persona.label}</option>
-            ))}
-          </select>
           {searchOpen ? (
             <label className="relative hidden sm:block">
               <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
