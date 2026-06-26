@@ -1305,11 +1305,11 @@ function calculateAssessmentScores(questions: typeof frameworkItems, answers: Re
 // --- Report spec (June 2026) — maturity scale, risk tiers, and persona content model ---
 
 const maturityLevels = [
-  { min: 0, label: 'Manual & Reactive', color: '#ef4444' },
-  { min: 21, label: 'Basic Digitalization', color: '#f97316' },
-  { min: 41, label: 'Process Driven', color: '#f59e0b' },
-  { min: 61, label: 'Integrated Workforce Mgmt', color: '#86efac' },
-  { min: 81, label: 'Best-in-Class EWF Excellence', color: '#16a34a' },
+  { min: 0, max: 20, label: 'Manual & Reactive', short: 'Manual', color: '#ef4444' },
+  { min: 21, max: 40, label: 'Basic Digitalization', short: 'Basic Digital', color: '#f97316' },
+  { min: 41, max: 60, label: 'Process Driven', short: 'Process Driven', color: '#f59e0b' },
+  { min: 61, max: 80, label: 'Integrated Workforce Management', short: 'Integrated', color: '#86efac' },
+  { min: 81, max: 100, label: 'Best-in-Class EWF Excellence', short: 'Best-in-Class', color: '#16a34a' },
 ]
 
 function maturityLevelIndex(score: number) {
@@ -1443,16 +1443,30 @@ function sortModulesForPersona(moduleEntries: Array<[string, number]>, persona: 
 
 function MaturityBar({ score }: { score: number }) {
   const levelIndex = maturityLevelIndex(score)
+  const currentLevel = maturityLevels[levelIndex]
   const nextLevel = maturityLevels[levelIndex + 1]
   return (
     <div>
-      <div className="flex gap-1">
+      <p className="text-xs font-bold text-slate-600">
+        Maturity Position — <span style={{ color: currentLevel.color }}>Level {levelIndex + 1} of 5</span>.
+        {nextLevel && (
+          <>
+            {' '}Next target: <span style={{ color: nextLevel.color }}>Level {levelIndex + 2} · {nextLevel.label} ({nextLevel.min}–{nextLevel.max}%)</span>
+          </>
+        )}
+      </p>
+      <div className="mt-2 flex gap-1">
         {maturityLevels.map((level, index) => (
           <div key={level.label} className="h-2 flex-1 rounded-full" style={{ backgroundColor: index <= levelIndex ? level.color : '#e5e7eb' }} />
         ))}
       </div>
-      <p className="mt-2 text-sm font-black" style={{ color: maturityLevels[levelIndex].color }}>{maturityLevels[levelIndex].label}</p>
-      {nextLevel && <p className="text-xs font-semibold" style={{ color: nextLevel.color }}>Next target: {nextLevel.label}</p>}
+      <div className="mt-2 flex flex-wrap justify-between gap-x-3 gap-y-1 text-[10px] font-bold">
+        {maturityLevels.map((level, index) => (
+          <span key={level.label} style={{ color: index === levelIndex ? level.color : '#94a3b8' }}>
+            L{index + 1} · {level.short}{index === levelIndex ? ' ◄ You are here' : ''}
+          </span>
+        ))}
+      </div>
     </div>
   )
 }
@@ -1491,7 +1505,7 @@ function ReportDetail({ contact, onOutreach, onDeck, showAdminActions = true }: 
       ) : (
         <>
           {/* 1. Header */}
-          <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-wide text-brand">{contact.company}</p>
               <span className="mt-2 inline-block rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-200">{content.badge}</span>
@@ -1500,12 +1514,16 @@ function ReportDetail({ contact, onOutreach, onDeck, showAdminActions = true }: 
               <p className="mt-1 text-sm font-medium text-slate-600">{contact.designation}</p>
               {showAdminActions && <p className="mt-2 text-sm text-slate-500">Industry: {contact.industry} | Assessment date: June 2026</p>}
             </div>
-            <div className="w-full max-w-xs rounded-md border border-slate-200 p-5">
+            <div className="w-full max-w-[220px] rounded-md border border-slate-200 p-5">
               <p className="text-xs font-bold uppercase text-slate-500">Overall score</p>
               <p className="mt-1 text-4xl font-black text-slate-950">{contact.score}%</p>
-              <div className="mt-3"><MaturityBar score={contact.score} /></div>
+              <p className="mt-1 text-xs font-bold" style={{ color: maturityLevels[maturityLevelIndex(contact.score)].color }}>{maturityLevels[maturityLevelIndex(contact.score)].label}</p>
             </div>
           </div>
+          <div className="mt-4 rounded-md border border-slate-200 p-4">
+            <MaturityBar score={contact.score} />
+          </div>
+          <div className="mt-5 border-b border-slate-200" />
 
           {/* 2. Exec summary KPI cards (persona-driven) */}
           <section className="grid gap-3 py-5 sm:grid-cols-3">
