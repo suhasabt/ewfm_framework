@@ -185,19 +185,19 @@ const answerOptions = [
   {
     value: 0,
     label: 'Not Available',
-    idleClass: 'border-red-300 text-slate-700 hover:bg-red-50',
+    idleClass: 'border-red-300 bg-red-50/60 text-red-900 hover:bg-red-50',
     activeClass: 'border-red-600 bg-red-600 text-white ring-2 ring-red-200',
   },
   {
     value: 1,
     label: 'Partially Available',
-    idleClass: 'border-yellow-300 text-slate-700 hover:bg-yellow-50',
+    idleClass: 'border-yellow-300 bg-yellow-50/60 text-yellow-900 hover:bg-yellow-50',
     activeClass: 'border-yellow-500 bg-yellow-500 text-white ring-2 ring-yellow-200',
   },
   {
     value: 2,
     label: 'Fully Available',
-    idleClass: 'border-emerald-300 text-slate-700 hover:bg-emerald-50',
+    idleClass: 'border-emerald-300 bg-emerald-50/60 text-emerald-900 hover:bg-emerald-50',
     activeClass: 'border-emerald-600 bg-emerald-600 text-white ring-2 ring-emerald-200',
   },
 ]
@@ -1657,7 +1657,7 @@ function AssessmentExperience() {
                           <button
                             key={option.value}
                             onClick={() => setAnswers((current) => ({ ...current, [index]: option.value }))}
-                            className={`min-h-[56px] rounded-md border bg-white px-3 py-2 text-center text-sm font-black leading-tight ${answers[index] === option.value ? option.activeClass : option.idleClass}`}
+                            className={`min-h-[56px] rounded-md border px-3 py-2 text-center text-sm font-black leading-tight transition-colors ${answers[index] === option.value ? option.activeClass : option.idleClass}`}
                           >
                             {option.label}
                           </button>
